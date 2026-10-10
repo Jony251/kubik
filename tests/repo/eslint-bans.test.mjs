@@ -139,6 +139,11 @@ const ALL_BANS = [
   },
   { label: 'idb-keyval', code: "import { get } from 'idb-keyval';\nexport const g = get;\n" },
   { label: '@sentry/*', code: "import * as Sentry from '@sentry/react';\nexport const s = Sentry;\n" },
+  {
+    label: '@sentry/*',
+    variant: '@sentry/browser',
+    code: "import * as Sentry from '@sentry/browser';\nexport const s = Sentry;\n",
+  },
   ...['../../engine/internal/clock', '../../audio/service', '../../progress/store'].map((from) => ({
     label: ENGINE_INTERNALS,
     variant: from,
@@ -232,6 +237,11 @@ describe('ESLint principle 3: no literal UI strings in JSX', () => {
       });
     }
   }
+
+  it('the rule is scoped: a literal outside app/ui/engine/mechanics/games is not flagged (control)', async () => {
+    const errors = await lint(LITERALS['English text'], 'apps/web/src/__lint_fixture__/X.tsx');
+    assert.deepEqual(errors.filter(isLiteral), [], `got ${fmt(errors)}`);
+  });
 });
 
 describe('ESLint principle 2: owners of time, sound and storage are not over-banned', () => {
