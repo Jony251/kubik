@@ -22,6 +22,10 @@ async function lint(code, filePath) {
   return result.messages.filter((m) => m.severity === 2);
 }
 
+// The ban must come from a core no-restricted-* rule: other rules (e.g. react-hooks/purity)
+// also mention Math.random in .tsx and would otherwise satisfy the test by accident.
+const isBan = (e, match) => /^no-restricted-/.test(e.ruleId ?? '') && match.test(e.message);
+
 const fmt = (errors) => JSON.stringify(errors.map((e) => `${e.ruleId}: ${e.message}`));
 
 const BANNED = [
@@ -64,7 +68,7 @@ describe('ESLint principle 2: banned APIs in games/** and mechanics/**', () => {
       it(`${dir}: ${api} is an error`, async () => {
         const errors = await lint(code, `apps/web/src/${dir}/__lint_fixture__/fixture.ts`);
         assert.ok(
-          errors.some((e) => match.test(e.message)),
+          errors.some((e) => isBan(e, match)),
           `expected an error naming ${api}; got ${fmt(errors)}`,
         );
       });
@@ -74,7 +78,7 @@ describe('ESLint principle 2: banned APIs in games/** and mechanics/**', () => {
       const code = 'export function C() {\n  return <span>{Math.random()}</span>;\n}\n';
       const errors = await lint(code, `apps/web/src/${dir}/__lint_fixture__/Fixture.tsx`);
       assert.ok(
-        errors.some((e) => /Math\.random/.test(e.message)),
+        errors.some((e) => isBan(e, /Math\.random/)),
         `got ${fmt(errors)}`,
       );
     });
@@ -103,7 +107,7 @@ describe('ESLint principle 2: owners of time, sound and storage are not over-ban
   for (const { where, code } of OWNERS) {
     it(`${where}/** may use its own platform API`, async () => {
       const errors = await lint(code, `apps/web/src/${where}/__lint_fixture__/owner.ts`);
-      const banErrors = errors.filter((e) => banMatch.test(e.message));
+      const banErrors = errors.filter((e) => isBan(e, banMatch));
       assert.deepEqual(banErrors, [], `principle-2 bans must be scoped to games/mechanics; got ${fmt(banErrors)}`);
     });
   }
