@@ -1,6 +1,7 @@
 // WP-01 DoD: a violator fixture fails ESLint for EVERY banned API (principle 2),
 // in games/** and mechanics/**, while the engine/audio/progress layers that own
 // time, sound and storage stay allowed. Focused/skipped tests are errors everywhere.
+// Principle 3: literal UI strings in JSX fail in app/ui/engine/mechanics/games.
 //
 // Fixtures are linted via lintText() with a virtual filePath, so no violating
 // file ever lands in the source tree and `npm run lint` stays green.
@@ -88,6 +89,148 @@ describe('ESLint principle 2: banned APIs in games/** and mechanics/**', () => {
       const errors = await lint(code, `apps/web/src/${dir}/__lint_fixture__/clean.ts`);
       assert.deepEqual(errors, [], `clean fixture must pass; got ${fmt(errors)}`);
     });
+  }
+});
+
+// Full ban matrix. `label` is the text every ban message starts with ("<label>: ..."),
+// which also lets the coverage test below prove that no configured ban is untested.
+const OWNED_BY_ENGINE = [
+  'setTimeout',
+  'setInterval',
+  'requestAnimationFrame',
+  'localStorage',
+  'sessionStorage',
+  'indexedDB',
+  'speechSynthesis',
+  'fetch',
+];
+const ENGINE_INTERNALS = 'engine internals, audio and progress';
+
+const ALL_BANS = [
+  { label: 'Math.random', code: 'export const x = Math.random();\n' },
+  { label: 'Date.now', code: 'export const n = Date.now();\n' },
+  { label: 'Date.now', variant: 'destructured', code: 'const { now } = Date;\nexport const n = now();\n' },
+  { label: 'performance.now', code: 'export const p = performance.now();\n' },
+  { label: 'crypto.getRandomValues', code: 'export const v = crypto.getRandomValues(new Uint8Array(4));\n' },
+  { label: 'crypto.randomUUID', code: 'export const id = crypto.randomUUID();\n' },
+  ...OWNED_BY_ENGINE.map((name) => ({ label: name, code: `export const g = ${name};\n` })),
+  ...['window', 'globalThis', 'self'].flatMap((object) =>
+    OWNED_BY_ENGINE.map((name) => ({ label: `${object}.${name}`, code: `export const g = ${object}.${name};\n` })),
+  ),
+  ...['queueMicrotask', 'Audio', 'AudioContext', 'XMLHttpRequest', 'WebSocket'].map((name) => ({
+    label: name,
+    code: `export const g = ${name};\n`,
+  })),
+  { label: 'new Date()', code: 'export const d = new Date();\n' },
+  { label: 'new Date()', variant: 'with arguments', code: 'export const d = new Date(0);\n' },
+  { label: 'Date()', code: 'export const s = Date();\n' },
+  { label: 'new Audio/AudioContext', variant: 'Audio', code: "export const a = new Audio('x.mp3');\n" },
+  { label: 'new Audio/AudioContext', variant: 'AudioContext', code: 'export const c = new AudioContext();\n' },
+  {
+    label: 'new Audio/AudioContext',
+    variant: 'webkitAudioContext',
+    code: 'declare const webkitAudioContext: typeof AudioContext;\nexport const c = new webkitAudioContext();\n',
+  },
+  { label: 'react-dom', code: "import { flushSync } from 'react-dom';\nexport const f = flushSync;\n" },
+  {
+    label: 'react-dom',
+    variant: 'react-dom/client',
+    code: "import { createRoot } from 'react-dom/client';\nexport const r = createRoot;\n",
+  },
+  { label: 'idb-keyval', code: "import { get } from 'idb-keyval';\nexport const g = get;\n" },
+  { label: '@sentry/*', code: "import * as Sentry from '@sentry/react';\nexport const s = Sentry;\n" },
+  ...['../../engine/internal/clock', '../../audio/service', '../../progress/store'].map((from) => ({
+    label: ENGINE_INTERNALS,
+    variant: from,
+    code: `import * as m from '${from}';\nexport const x = m;\n`,
+  })),
+];
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+describe('ESLint principle 2: every configured ban, in games/** and mechanics/**', () => {
+  for (const dir of PURE_DIRS) {
+    for (const { label, variant, code } of ALL_BANS) {
+      it(`${dir}: all bans: ${label}${variant ? ` (${variant})` : ''}`, async () => {
+        const errors = await lint(code, `apps/web/src/${dir}/__lint_fixture__/fixture.ts`);
+        assert.ok(
+          errors.some((e) => isBan(e, new RegExp(`^'?[^:]*${escapeRe(label)}`))),
+          `expected a no-restricted-* error naming ${label}; got ${fmt(errors)}`,
+        );
+      });
+    }
+
+    it(`${dir}: importing the public engine API is allowed (control)`, async () => {
+      const code = "import * as engine from '../../engine/public';\nexport const e = engine;\n";
+      const errors = await lint(code, `apps/web/src/${dir}/__lint_fixture__/fixture.ts`);
+      assert.deepEqual(
+        errors.filter((e) => /^no-restricted-/.test(e.ruleId ?? '')),
+        [],
+        `got ${fmt(errors)}`,
+      );
+    });
+
+    it(`${dir}: testkit/** is linted like game code`, async () => {
+      for (const file of ['testkit/solve.ts', 'add-subtract/testkit/index.ts']) {
+        const errors = await lint(
+          'export const pick = (n: number): number => Math.floor(Math.random() * n);\n',
+          `apps/web/src/${dir}/__lint_fixture__/${file}`,
+        );
+        assert.ok(
+          errors.some((e) => isBan(e, /Math\.random/)),
+          `${file}: testkit is part of the GameModule and must be pure; got ${fmt(errors)}`,
+        );
+      }
+    });
+  }
+
+  it('every ban configured in kidsPurity has a case above', async () => {
+    const { pathToFileURL } = await import('node:url');
+    const { fromRoot } = await import('../support/paths.mjs');
+    const { kidsPurity } = await import(pathToFileURL(fromRoot('eslint.config.js')).href);
+    const entries = kidsPurity
+      .flatMap((block) => Object.values(block.rules ?? {}))
+      .flatMap(([, ...options]) => options)
+      .flatMap((o) => (o.paths || o.patterns ? [...(o.paths ?? []), ...(o.patterns ?? [])] : [o]));
+    const configured = new Set(entries.map((o) => String(o.message).split(':')[0]));
+    const covered = new Set(ALL_BANS.map((b) => b.label));
+    const untested = [...configured].filter((label) => !covered.has(label));
+    assert.ok(configured.size > 0, 'kidsPurity must be exported from eslint.config.js');
+    assert.deepEqual(untested, [], 'every ban message must start with "<label>:" and have a case in ALL_BANS');
+  });
+});
+
+describe('ESLint principle 3: no literal UI strings in JSX', () => {
+  const I18N_DIRS = ['app', 'ui', 'engine', 'mechanics', 'games'];
+  const isLiteral = (e) => /no-literal-string/.test(e.ruleId ?? '');
+  const LITERALS = {
+    'English text': 'export function C() {\n  return <p>Hello</p>;\n}\n',
+    'Russian text': 'export function C() {\n  return <p>Привет</p>;\n}\n',
+    'Hebrew text': 'export function C() {\n  return <p>שלום</p>;\n}\n',
+    'alt attribute': 'export function C({ s }: { s: string }) {\n  return <img src={s} alt="cat" />;\n}\n',
+    'aria-label attribute': 'export function C() {\n  return <button type="button" aria-label="Close" />;\n}\n',
+    'placeholder attribute': 'export function C() {\n  return <input placeholder="Your name" />;\n}\n',
+  };
+  const ALLOWED = {
+    'digits, symbols and emoji': 'export function C({ n }: { n: number }) {\n  return <p>{n} ⭐ 3 + 4 = ? 42</p>;\n}\n',
+    't() call':
+      "declare function t(key: string): string;\nexport function C() {\n  return <p>{t('greeting.hello')}</p>;\n}\n",
+  };
+
+  for (const dir of I18N_DIRS) {
+    const file = `apps/web/src/${dir}/__lint_fixture__/Fixture.tsx`;
+    for (const [name, code] of Object.entries(LITERALS)) {
+      it(`${dir}: ${name} is an error`, async () => {
+        const errors = await lint(code, file);
+        assert.ok(errors.some(isLiteral), `expected no-literal-string; got ${fmt(errors)}`);
+      });
+    }
+    for (const [name, code] of Object.entries(ALLOWED)) {
+      it(`${dir}: ${name} is allowed (control)`, async () => {
+        const errors = await lint(code, file);
+        assert.deepEqual(errors.filter(isLiteral), [], `got ${fmt(errors)}`);
+      });
+    }
   }
 });
 
