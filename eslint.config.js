@@ -64,11 +64,9 @@ export const kidsPurity = [
       'no-restricted-imports': [
         'error',
         {
-          paths: [
-            { name: 'react-dom', message: `react-dom: ${USE_ENGINE}` },
-            { name: 'idb-keyval', message: `idb-keyval: ${USE_ENGINE}` },
-          ],
+          paths: [{ name: 'idb-keyval', message: `idb-keyval: ${USE_ENGINE}` }],
           patterns: [
+            { group: ['react-dom', 'react-dom/*'], message: `react-dom: ${USE_ENGINE}` },
             { group: ['@sentry/*'], message: `@sentry/*: ${USE_ENGINE}` },
             {
               group: ['**/engine/internal/**', '**/audio/**', '**/progress/**'],
