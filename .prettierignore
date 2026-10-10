@@ -1,0 +1,5 @@
+package-lock.json
+dist/
+coverage/
+# Verbatim copies of the planning documents; kept byte-for-byte as written.
+docs/planning/
