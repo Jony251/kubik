@@ -29,7 +29,7 @@ export const kidsPurity = [
   {
     name: 'kubik/kids-purity',
     files: KIDS_CODE,
-    ignores: ['**/*.test.*', '**/testkit/**'],
+    ignores: ['**/*.test.*'],
     rules: {
       'no-restricted-properties': [
         'error',
