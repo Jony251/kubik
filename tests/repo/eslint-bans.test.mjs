@@ -26,12 +26,24 @@ const fmt = (errors) => JSON.stringify(errors.map((e) => `${e.ruleId}: ${e.messa
 
 const BANNED = [
   { api: 'Math.random', match: /Math\.random/, code: 'export const x = Math.random();\n' },
-  { api: 'Math.random (destructured)', match: /random/, code: 'const { random } = Math;\nexport const x = random();\n' },
+  {
+    api: 'Math.random (destructured)',
+    match: /random/,
+    code: 'const { random } = Math;\nexport const x = random();\n',
+  },
   { api: 'setTimeout', match: /setTimeout/, code: 'export const t = setTimeout(() => undefined, 10);\n' },
   { api: 'window.setTimeout', match: /setTimeout/, code: 'export const t = window.setTimeout(() => undefined, 10);\n' },
-  { api: 'globalThis.setTimeout', match: /setTimeout/, code: 'export const t = globalThis.setTimeout(() => undefined, 10);\n' },
+  {
+    api: 'globalThis.setTimeout',
+    match: /setTimeout/,
+    code: 'export const t = globalThis.setTimeout(() => undefined, 10);\n',
+  },
   { api: 'setInterval', match: /setInterval/, code: 'export const t = setInterval(() => undefined, 10);\n' },
-  { api: 'requestAnimationFrame', match: /requestAnimationFrame/, code: 'export const r = requestAnimationFrame(() => undefined);\n' },
+  {
+    api: 'requestAnimationFrame',
+    match: /requestAnimationFrame/,
+    code: 'export const r = requestAnimationFrame(() => undefined);\n',
+  },
   { api: 'Date.now', match: /Date\.now/, code: 'export const n = Date.now();\n' },
   { api: 'new Date()', match: /Date/, code: 'export const d = new Date();\n' },
   { api: 'performance.now', match: /performance\.now/, code: 'export const p = performance.now();\n' },
@@ -61,7 +73,10 @@ describe('ESLint principle 2: banned APIs in games/** and mechanics/**', () => {
     it(`${dir}: ban also applies to .tsx`, async () => {
       const code = 'export function C() {\n  return <span>{Math.random()}</span>;\n}\n';
       const errors = await lint(code, `apps/web/src/${dir}/__lint_fixture__/Fixture.tsx`);
-      assert.ok(errors.some((e) => /Math\.random/.test(e.message)), `got ${fmt(errors)}`);
+      assert.ok(
+        errors.some((e) => /Math\.random/.test(e.message)),
+        `got ${fmt(errors)}`,
+      );
     });
 
     it(`${dir}: clean pure code has no errors (control)`, async () => {
@@ -105,7 +120,10 @@ describe('ESLint: focused and skipped tests are errors repo-wide', () => {
     'it.skip': "describe('s', () => { it.skip('t', () => { expect(1).toBe(1); }); });\n",
     'test.skip': "test.skip('t', () => { expect(1).toBe(1); });\n",
   };
-  const LOCATIONS = ['apps/web/src/engine/__lint_fixture__/x.test.ts', 'packages/shared/src/__lint_fixture__/x.test.ts'];
+  const LOCATIONS = [
+    'apps/web/src/engine/__lint_fixture__/x.test.ts',
+    'packages/shared/src/__lint_fixture__/x.test.ts',
+  ];
 
   for (const file of LOCATIONS) {
     for (const [name, body] of Object.entries(CASES)) {
@@ -119,7 +137,8 @@ describe('ESLint: focused and skipped tests are errors repo-wide', () => {
     }
 
     it(`a normal test in ${file.split('/__lint_fixture__')[0]} has no errors (control)`, async () => {
-      const body = "describe('s', () => { it('t', () => { expect(1).toBe(1); }); test('u', () => { expect(2).toBe(2); }); });\n";
+      const body =
+        "describe('s', () => { it('t', () => { expect(1).toBe(1); }); test('u', () => { expect(2).toBe(2); }); });\n";
       const errors = await lint(header + body, file);
       assert.deepEqual(errors, [], `got ${fmt(errors)}`);
     });

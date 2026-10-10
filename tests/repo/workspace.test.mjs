@@ -62,4 +62,3 @@ describe('build smoke', () => {
     assert.ok(existsSync(fromRoot('apps/web/dist', script[1])), `built entry ${script[1]} is missing`);
   });
 });
-
